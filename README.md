@@ -1,2 +1,2 @@
 # swanos
-Open-Source x86 OS/Kernel for all users
+SwanOS - open source x86 operating system in C language.
