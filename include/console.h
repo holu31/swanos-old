@@ -28,3 +28,5 @@ uint16_t* buffer;
 
 void cinit(void);
 void cputch(char c);
+void update_cursor();
+void cset_color(vga_color colfg, vga_color colbg);
