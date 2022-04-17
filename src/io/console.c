@@ -1,6 +1,15 @@
 #include <console.h>
 #include <ports.h>
 
+void update_cursor(){
+    uint16_t pos = row * 80 + column;
+ 
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (uint8_t) (pos & 0xFF));
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, (uint8_t) ((pos >> 8) & 0xFF));
+}
+
 void cset_color(uint8_t colfg, uint8_t colbg){
     color = colfg | colbg << 4;
 }
@@ -26,4 +35,5 @@ void cputch(char c){
         if (++row == 25)
             row = 0;
     }
+    update_cursor();
 }
