@@ -14,16 +14,11 @@ void cinit(void) {
 }
 
 void cputch(char c){
-    if ((column + 8) >= (int)80 || c == '\n'){
-        buffer[row] = column;
+    const size_t index = row * 80 + column;
+    if(c != '\n') buffer[index] = (uint16_t) c | (uint16_t) color << 8;
+    if (++column == 80 || c == '\n') {
         column = 0;
-    } else {
-        const size_t index = row * 80 + column;
-        buffer[index] = (uint16_t) c | (uint16_t) color << 8;
-        if (++column == 80) {
-            column = 0;
-            if (++row == 25)
-                row = 0;
-        }
+        if (++row == 25)
+            row = 0;
     }
 }
