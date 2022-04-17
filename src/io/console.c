@@ -21,4 +21,17 @@ void cputch(char c){
         if (++row == 25)
             row = 0;
     }
+    update_cursor();
+}
+
+void update_cursor(){
+    uint16_t pos = row * 80 + col;
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (uint8_t) (pos & 0xFF));
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, (uint8_t) ((pos >> 8) & 0xFF));
+}
+
+void cset_color(vga_color colfg, vga_color colbg){
+    color = colfg | colbg << 4;
 }
