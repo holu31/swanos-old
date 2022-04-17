@@ -1,12 +1,12 @@
-/* С метки _start мы будем грузиться */
 ENTRY (_start)
+OUTPUT_FORMAT(elf32-i386)
 
 SECTIONS
 {
-        . = 0x00100000;
-    /* Ядро будет находиться в 3GB + 1MB в виртуальном адресном пространстве, */
-    /* который будет отображен на 1 МБ в физическом адресном пространстве. */
-    /* Обратите внимание, что мы выравниваем разделы по страницам. */
+    . = 0x00100000;
+    /* The kernel will live at 3GB + 1MB in the virtual address space, */
+    /* which will be mapped to 1MB in the physical address space. */
+    /* Note that we page-align the sections. */
 
     _kernel_start = .;
         .multiboot.data : {
@@ -18,7 +18,7 @@ SECTIONS
        }
 
     . += 0xC0000000;
-    /* Добавляем символ, указывающий начальный адрес ядра. */
+    /* Add a symbol that indicates the start address of the kernel. */
     .text ALIGN (4K) : AT (ADDR (.text) - 0xC0000000)
     {
         *(.text)
@@ -37,6 +37,6 @@ SECTIONS
         *(.bss)
         *(.bootstrap_stack)
     }
-    /* Добавляем символ, указывающий конечный адрес ядра. */
+    /* Add a symbol that indicates the end address of the kernel. */
     _kernel_end = .;
 }
