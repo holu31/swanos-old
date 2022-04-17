@@ -1,118 +1,156 @@
-# Объявиляем константы для мультизагрузочного заголовка. 
-.set ALIGN,    1<<0             # выравниваем загруженные модули по границам страницы 
-.set MEMINFO,  1<<1             # продоставляем карту памяти 
-.set FLAGS,    ALIGN | MEMINFO  # это поле предоставляет флаг мультизагрузки 
-.set MAGIC,    0x1BADB002       # магическое число позволяет загрузчику найти заголовок 
-.set CHECKSUM, -(MAGIC + FLAGS) # контрольная сумма чтобы показать что код мультизагрузочный
+.code32
 
-# Объявить мультизагрузочный заголовок который отмечает программу как ядро. 
+# Declare constants for the multiboot header.
+.set ALIGN,    1<<0             # align loaded modules on page boundaries
+.set MEMINFO,  1<<1             # provide memory map
+.set FLAGS,    ALIGN | MEMINFO  # this is the Multiboot 'flag' field
+.set MAGIC,    0x1BADB002       # 'magic number' lets bootloader find the header
+.set CHECKSUM, -(MAGIC + FLAGS) # checksum of above, to prove we are multiboot
+
+# Declare a multiboot header that marks the program as a kernel.
 .section .multiboot.data, "aw"
 .align 4
 .long MAGIC
 .long FLAGS
 .long CHECKSUM
 
-# Выделить начальный стек. 
+# Allocate the initial stack.
 .section .bootstrap_stack, "aw", @nobits
 stack_bottom:
 .skip 16384 # 16 KiB
 stack_top:
 
-# Предварительно выделить страницы, используемые для разбиения на страницы. Не программируйте адреса жестко и не предполагайте, что они 
-# доступны, так как загрузчик мог загрузить 
-# туда свои мультизагрузочные структуры или  модули. Это позволяет загрузчику знать, что он должен избегать адресов. 
+# Preallocate pages used for paging. Don't hard-code addresses and assume they
+# are available, as the bootloader might have loaded its multiboot structures or
+# modules there. This lets the bootloader know it must avoid the addresses.
 .section .bss, "aw", @nobits
     .align 4096
 boot_page_directory:
     .skip 4096
 boot_page_table1:
     .skip 4096
-# Если размер ядра превышает 3 МБ, могут потребоваться дополнительные таблицы страниц. 
+# Further page tables may be required if the kernel grows beyond 3 MiB.
 
-# Точка входа в ядро. 
+# The kernel entry point.
 .section .multiboot.text, "a"
 .global _start
 .type _start, @function
 _start:
-    # Физический адрес boot_page_table1.
+    # Physical address of boot_page_table1.
+    # TODO: I recall seeing some assembly that used a macro to do the
+    #       conversions to and from physical. Maybe this should be done in this
+    #       code as well?
     movl $(boot_page_table1 - 0xC0000000), %edi
-
-    # Первый адрес для сопоставления - это адрес 0. 
+    # First address to map is address 0.
+    # TODO: Start at the first kernel page instead. Alternatively map the first
+    #       1 MiB as it can be generally useful, and there's no need to
+    #       specially map the VGA buffer.
     movl $0, %esi
-    
-    # Отобразить 1023 страницы. 1024-й будет текстовым буфером VGA. 
+    # Map 1023 pages. The 1024th will be the VGA text buffer.
     movl $1023, %ecx
 
 1:
-    # Отображение только ядра. 
+    # Only map the kernel.
     cmpl $_kernel_start, %esi
     jl 2f
     cmpl $(_kernel_end - 0xC0000000), %esi
     jge 3f
 
-    # Сопоставьте физический адрес как "настоящий, доступный для записи". Обратите внимание, что это отображает 
-    # .text и .rodata как доступные для записи. Помните о безопасности и отметьте их как недоступные для записи. 
+    # Map physical address as "present, writable". Note that this maps
+    # .text and .rodata as writable. Mind security and map them as non-writable.
     movl %esi, %edx
     orl $0x003, %edx
     movl %edx, (%edi)
 
 2:
-    # Размер страницы 4096 байт. 
+    # Size of page is 4096 bytes.
     addl $4096, %esi
-
-    # Размер записей в boot_page_table1 составляет 4 байта. 
+    # Size of entries in boot_page_table1 is 4 bytes.
     addl $4, %edi
-
-    # Переходим к следующей записи, если мы еще не закончили. 
+    # Loop to the next entry if we haven't finished.
     loop 1b
 
 3:
-    # Отображение видеопамяти VGA в 0xC03FF000 как «настоящее, доступное для записи».
+    # Map VGA video memory to 0xC03FF000 as "present, writable".
     movl $(0x000B8000 | 0x003), boot_page_table1 - 0xC0000000 + 1023 * 4
 
-    # Таблица страниц используется для обеих записей каталога страниц 0 (практически с 0x0
-    # на 0x3FFFFF) (таким образом, идентичность отображает ядро) и запись каталога страниц 
-    # 768 (фактически от 0xC0000000 до 0xC03FFFFF) (таким образом, отображая ее в 
-    # верхней половине ). Ядро привязано к идентичности, потому что включение подкачки 
-    # не меняет следующую инструкцию, которая продолжает оставаться физической. 
-    # Если не было сопоставления идентификаторов, CPU # вместо этого выдает ошибку страницы. 
+    # The page table is used at both page directory entry 0 (virtually from 0x0
+    # to 0x3FFFFF) (thus identity mapping the kernel) and page directory entry
+    # 768 (virtually from 0xC0000000 to 0xC03FFFFF) (thus mapping it in the
+    # higher half). The kernel is identity mapped because enabling paging does
+    # not change the next instruction, which continues to be physical. The CPU
+    # would instead page fault if there was no identity mapping.
 
-    # Сопоставьте таблицу страниц с обоими виртуальными адресами 0x00000000 и 0xC0000000. 
+    # Map the page table to both virtual addresses 0x00000000 and 0xC0000000.
     movl $(boot_page_table1 - 0xC0000000 + 0x003), boot_page_directory - 0xC0000000 + 0
     movl $(boot_page_table1 - 0xC0000000 + 0x003), boot_page_directory - 0xC0000000 + 768 * 4
 
-    # Установите cr3 на адрес boot_page_directory. 
+    # Set cr3 to the address of the boot_page_directory.
     movl $(boot_page_directory - 0xC0000000), %ecx
     movl %ecx, %cr3
 
-    # Разрешить разбиение на страницы и бит защиты от записи.
+    # Enable paging and the write-protect bit.
     movl %cr0, %ecx
     orl $0x80010000, %ecx
     movl %ecx, %cr0
 
-    # Переход на higher half с абсолютным прыжком. 
+    # Jump to higher half with an absolute jump. 
     lea 4f, %ecx
     jmp *%ecx
 
+
 .section .text
 
-4:
-    # На этом этапе подкачка полностью настроена и включена. 
+jmp skip_idt
 
-    # Отмените отображение идентификатора, поскольку теперь в нем нет необходимости.  
+
+.global gdt_flush
+.global load_idt
+.global keyboard_handler
+
+
+load_idt:
+    mov 4(%esp), %eax
+    lidt (%eax)
+    ret
+
+
+gdt_flush:
+    cli
+
+    mov 4(%esp), %eax
+    lgdt (%eax)
+
+    mov $0x10, %ax # 0x10 is the offset in the GDT to our data segment 
+    mov %ax, %ds
+    mov %ax, %es
+    mov %ax, %fs
+    mov %ax, %gs
+    mov %ax, %ss
+
+    jmp $0x08, $.flush
+
+.flush:
+    ret # back to c
+skip_idt:
+
+
+4:
+    # At this point, paging is fully set up and enabled.
+
+    # Unmap the identity mapping as it is now unnecessary. 
     movl $0, boot_page_directory + 0
 
-    # Перезагрузите crc3, чтобы принудительно очистить TLB, чтобы изменения вступили в силу. 
+    # Reload crc3 to force a TLB flush so the changes to take effect.
     movl %cr3, %ecx
     movl %ecx, %cr3
 
-    # Настраиваем стек.
+    # Set up the stack.
     mov $stack_top, %esp
 
-    # Открытие ядра.
     call kernel_main
 
-    # Ой все))
+    # Infinite loop if the system has nothing more to do.
     cli
-1:	hlt
-    # Отключение ОС
+1:  hlt
+    jmp 1b
