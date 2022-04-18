@@ -1,12 +1,8 @@
 #include <console.h>
-
-char hello[5] = "Hello";
+#include <gdt.h>
 
 void kernel_main(){
 	cinit();
-	for(int i=0;i<5;i++)
-		cputch(hello[i]);
-	cputch('\n');
-	cputch('h');
+	gdt_init();
 	while(1);
 }
