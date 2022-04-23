@@ -43,7 +43,7 @@ char scancodes[128] = {
 
 void kb_init(){
     outb(0x21, 0xFD);
-    cprint("keyboard init");
+    cprint("keyboard init\n");
 }
 
 int kb_get(){
