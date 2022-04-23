@@ -47,8 +47,8 @@ void kb_init(){
 }
 
 int kb_get(){
-    int i, scancode;
-    for(i = 1000; i > 0; i++) {
+    int scancode;
+    while(1){
         if((inb(0x64) & 1) == 0) continue;
         scancode = inb(0x60);
         break;
