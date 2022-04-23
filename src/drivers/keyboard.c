@@ -53,8 +53,6 @@ int kb_get(){
         scancode = inb(0x60);
         break;
     }
-    if(i > 0) {
-        return scancode;
-    }
+    return scancode;
     return 0;
 }
