@@ -42,5 +42,5 @@ void gdt_init() {
     gdt_set_gate(3, 0, 0xFFFFFFFF, 0xFA, 0xCF);
     gdt_set_gate(4, 0, 0xFFFFFFFF, 0xF2, 0xCF);
     gdt_flush(&gp);
-    cprint("gdt init");
+    cprint("gdt init\n");
 }
